@@ -4,28 +4,38 @@
 # MQTT is published using the 'single' publish instead of opening a client connection
 # See the file protocol.mdown for a description of the SUD communications flow
 #
+import json
+import pprint
+import sys
+
+import usb.core
+import usb.util
+
 import paho.mqtt.publish as publish
-import usb.core, usb.util
-import sys, json, pprint
 from bitstring import BitArray
-interface=0
-hostname='lonna'
-topic='raw/aquarium'
-vendor=9463
-product=8708
+
+interface = 0
+hostname = "lonna"
+topic = "raw/aquarium"
+vendor = 9463
+product = 8708
+
 
 def printhex(s):
-    return(type(s),len(s),":".join("{:02x}".format(c) for c in s))
+    return (type(s), len(s), ":".join("{:02x}".format(c) for c in s))
 
-def printbit(s): 
-    return(type(s),len(s),":".join("{:02x}".format(c) for c in s))
+
+def printbit(s):
+    return (type(s), len(s), ":".join("{:02x}".format(c) for c in s))
+
 
 def set_up():
     # find the device using product id strings
     dev = usb.core.find(idVendor=vendor, idProduct=product)
     if __debug__:
-        print("device       >>>",dev)
-    return(dev)
+        print("device       >>>", dev)
+    return dev
+
 
 def read_sud(dev, interface):
     # release kernel driver if active
@@ -36,72 +46,80 @@ def read_sud(dev, interface):
     dev.set_configuration()
     usb.util.claim_interface(dev, interface)
     configuration = dev.get_active_configuration()
-    interface = configuration[(0,0)]
+    interface = configuration[(0, 0)]
     if __debug__:
-        print("configuration>>>",configuration)
-        print("interface    >>>",interface)
+        print("configuration>>>", configuration)
+        print("interface    >>>", interface)
 
     # find the first in and out endpoints in our interface
-    epIn = usb.util.find_descriptor(interface, custom_match= lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_IN)
-    epOut = usb.util.find_descriptor(interface, custom_match = lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_OUT)
+    epIn = usb.util.find_descriptor(
+        interface,
+        custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_IN,
+    )
+    epOut = usb.util.find_descriptor(
+        interface,
+        custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_OUT,
+    )
 
     # were our endpoints found?
     assert epIn is not None
     assert epOut is not None
     if __debug__:
-        print("endpoint in  >>>",epIn)
-        print("endpoint out >>>",epOut)
+        print("endpoint in  >>>", epIn)
+        print("endpoint out >>>", epOut)
 
     # write to device with hello string
-    msg="HELLOSUD"
-    rc=dev.write(epOut,msg)
+    msg = "HELLOSUD"
+    rc = dev.write(epOut, msg)
     if __debug__:
-        print("HELO ret code>>>",rc)
+        print("HELO ret code>>>", rc)
 
     # read from device
-    ret=dev.read(epIn,epIn.wMaxPacketSize)
+    ret = dev.read(epIn, epIn.wMaxPacketSize)
     if __debug__:
-        print("HELO hex     >>>",printhex(ret))
+        print("HELO hex     >>>", printhex(ret))
 
     # write to device with reading request
-    msg="READING"
-    rc=dev.write(epOut,msg)
+    msg = "READING"
+    rc = dev.write(epOut, msg)
     if __debug__:
-        print("READ ret code>>>",rc)
+        print("READ ret code>>>", rc)
 
     # read from device twice, first for return from "READING", second for actual values
-    ret=dev.read(epIn,epIn.wMaxPacketSize,1000)
-    ret=dev.read(epIn,epIn.wMaxPacketSize,10000)
+    ret = dev.read(epIn, epIn.wMaxPacketSize, 1000)
+    ret = dev.read(epIn, epIn.wMaxPacketSize, 10000)
     c = BitArray(ret)
     if __debug__:
-        print("sensor hex   >>>",printhex(ret))
-        print("sensor bits len>",len(c.bin))
-        print("sensor bits  >>>",c.bin)
-        
+        print("sensor hex   >>>", printhex(ret))
+        print("sensor bits len>", len(c.bin))
+        print("sensor bits  >>>", c.bin)
+
     # write to device with close string
-    msg="BYESUD"
-    rc=dev.write(epOut,msg)
+    msg = "BYESUD"
+    rc = dev.write(epOut, msg)
     if __debug__:
-        print("BYE ret code >>>",rc)
-    return(c)
+        print("BYE ret code >>>", rc)
+    return c
+
 
 def mungReadings(p):
     # see protocol.mdown for explaination of where the bitstrings start and end
-    s={}
-    i=36
-    s['InWater']=p[i]
-    s['SlideNotFitted']=p[i+1]
-    s['SlideExpired']=p[i+2]
-    ph=p[80:96]
-    s['pH']=ph.uintle/100   # divided by 100
-    nh3=p[96:112]
-    s['NH3']=nh3.uintle/1000  # divided by 1000
-    temp=p[112:144]
-    s['Temp']=temp.intle/1000 # divided by 1000
+    s = {}
+    i = 36
+    s["InWater"] = p[i]
+    s["SlideNotFitted"] = p[i + 1]
+    s["SlideExpired"] = p[i + 2]
+    ph = p[80:96]
+    s["pH"] = ph.uintle / 100  # divided by 100
+    nh3 = p[96:112]
+    s["NH3"] = nh3.uintle / 1000  # divided by 1000
+    temp = p[112:144]
+    s["Temp"] = temp.intle / 1000  # divided by 1000
     if __debug__:
         pprint.pprint(s)
     j = json.dumps(s, ensure_ascii=False)
-    return(j)
+    return j
+
 
 def clean_up(dev):
     # re-attach kernel driver
@@ -112,17 +130,19 @@ def clean_up(dev):
     usb.util.dispose_resources(dev)
     dev.reset()
 
+
 def main():
     # open device
     device = set_up()
     # read device
     sensor = read_sud(device, interface)
     # format into json
-    readings=mungReadings(sensor)
+    readings = mungReadings(sensor)
     # push readings to MQTT broker
     publish.single(topic, readings, hostname=hostname)
     # close device
     clean_up(device)
+
 
 if __name__ == "__main__":
     main()
