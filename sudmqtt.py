@@ -24,7 +24,7 @@ topic = "raw/aquarium"
 vendor = 9463
 product = 8708
 
-timestamp = datetime.datetime.now().isoformat()
+timestamp = datetime.datetime.utcnow().isoformat()
 
 parser = argparse.ArgumentParser(description="Read and send Seneye readings to AWS IOT")
 
