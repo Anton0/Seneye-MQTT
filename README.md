@@ -6,7 +6,7 @@ We are utilising the SUD outside its design boundaries, thanks to the kindness o
 
 ## Requirements
 - Seneye USB device
-- Python libraries pprint, pyusb, paho-mqtt 
+- Python libraries pprint, pyusb 
 - Linux SBC ('single-board computer' - Odroid, Raspberry Pi, ...)
 - microUSB adapter if your SBC does not have a normal size USB connection
 - MQTT broker such as Bluemix, HiveMQ, CloudMQTT, or see https://github.com/mqtt/mqtt.github.io/wiki/public_brokers
